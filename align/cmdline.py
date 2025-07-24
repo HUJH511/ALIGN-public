@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 class CmdlineParser():
 
     def __init__(self, *args, **kwargs):
-        align_home = os.environ.get( 'ALIGN_HOME', None)
+        align_home = os.environ.get('ALIGN_HOME', None)
 
         parser = argparse.ArgumentParser(*args, **kwargs,
             description="directory path for input circuits")
@@ -43,8 +43,7 @@ class CmdlineParser():
                             \nIf no name given it takes file name as subckt name. \
                             \nIf there are instances at top level,\
                             a new subckt is created of name filename')
-        parser.add_argument(
-                            "-flat",
+        parser.add_argument("-flat",
                             "--flatten",
                             type=int,
                             default=0,
@@ -63,16 +62,16 @@ class CmdlineParser():
                             "--extract",
                             action='store_true',
                             help='Set to true to extract post-layout netlist')
-        # parser.add_argument( "-g", "--generate",
+        # parser.add_argument("-g", "--generate",
         #                     action='store_true',
         #                     help="Set the true to generate png")
         log_level, verbosity = logmanager.get_loglevels()
-        parser.add_argument( "-l", "--log",
+        parser.add_argument("-l", "--log",
                             dest="log_level",
                             choices=['DEBUG','INFO','WARNING','ERROR','CRITICAL'],
                             default=log_level,
                             help="Logfile logging level (default: %(default)s)")
-        parser.add_argument( "-v", "--verbosity",
+        parser.add_argument("-v", "--verbosity",
                             dest="verbosity",
                             choices=['DEBUG','INFO','WARNING','ERROR','CRITICAL'],
                             default=verbosity,

@@ -179,7 +179,7 @@ The final output GDS can be viewed using by importing in virtuoso or any GDS vie
 * [Viewer](https://github.com/ALIGN-analoglayout/ALIGN-public/tree/master/Viewer): Layout viewer to view output JSON file
 
 
-## ALIGN-pdk-sky130
+## [ALIGN-pdk-sky130](https://github.com/ALIGN-analoglayout/ALIGN-pdk-sky130)
 
 We are working to support [SKY130](https://github.com/google/skywater-pdk) with [ALIGN](https://github.com/ALIGN-analoglayout/ALIGN-public)
 
