@@ -8,12 +8,11 @@ def configure_logging():
     cfg.read(pathlib.Path(__file__).parent.parent / 'config' / 'logging.ini')
     logfile = pathlib.Path(cfg['handler_fileHandler']['args'].split("'")[1])
     logfile.parent.mkdir(exist_ok=True)
-    rollover = logfile.is_file()
     logging.config.fileConfig(cfg, disable_existing_loggers=False)
-    divider = f"\n----- New run at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} -----\n"
-    if rollover:
-        with logfile.open("a", encoding='utf8') as f:
-            f.write(divider)
+    divider = f"\n------------------- New run at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} -------------------\n"
+    with logfile.open("a", encoding='utf8') as f:
+        f.write(divider)
+    # rollover = logfile.is_file()
     # if rollover:
     #     for x in logging.getLogger().handlers:
     #         if isinstance(x, logging.handlers.RotatingFileHandler):
