@@ -1,6 +1,7 @@
 import logging.config
 import pathlib
 import configparser
+from datetime import datetime
 
 def configure_logging():
     cfg = configparser.ConfigParser()
@@ -9,9 +10,10 @@ def configure_logging():
     logfile.parent.mkdir(exist_ok=True)
     rollover = logfile.is_file()
     logging.config.fileConfig(cfg, disable_existing_loggers=False)
+    divider = f"\n----- New run at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} -----\n"
     if rollover:
         with logfile.open("a", encoding='utf8') as f:
-            f.write("\n--------\n")
+            f.write(divider)
     # if rollover:
     #     for x in logging.getLogger().handlers:
     #         if isinstance(x, logging.handlers.RotatingFileHandler):
