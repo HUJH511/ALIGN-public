@@ -10,9 +10,12 @@ def configure_logging():
     rollover = logfile.is_file()
     logging.config.fileConfig(cfg, disable_existing_loggers=False)
     if rollover:
-        for x in logging.getLogger().handlers:
-            if isinstance(x, logging.handlers.RotatingFileHandler):
-                x.doRollover()
+        with logfile.open("a", encoding='utf8') as f:
+            f.write("\n--------\n")
+    # if rollover:
+    #     for x in logging.getLogger().handlers:
+    #         if isinstance(x, logging.handlers.RotatingFileHandler):
+    #             x.doRollover()
 
 def reconfigure_loglevels(file_level=None, console_level=None):
     if file_level and console_level:
