@@ -8,7 +8,7 @@ def configure_logging():
     cfg.read(pathlib.Path(__file__).parent.parent / 'config' / 'logging.ini')
     logfile = pathlib.Path(cfg['handler_fileHandler']['args'].split("'")[1])
     logfile.parent.mkdir(exist_ok=True)
-    rollover = logfile.is_file()
+    rollover = logfile.is_file() and logfile.stat().st_size > 0
     logging.config.fileConfig(cfg, disable_existing_loggers=False)
     message = f" New run at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} "
     with logfile.open("a", encoding='utf8') as f:
