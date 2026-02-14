@@ -342,16 +342,7 @@
 "Layer": "CapMIMLayer",
 "GdsLayerNo": 89,
 "GdsDatatype": {"Draw":44},
-"Enclosure": 150
-},
-
-{
-"Layer": "CapMIMContact",
-"GdsLayerNo": 70,
-"GdsDatatype": {"Draw":44},
-"WidthX": 200,
-"WidthY": 200,
-"Enclosure": 200
+"Enclosure": 500
 },
 
 {
