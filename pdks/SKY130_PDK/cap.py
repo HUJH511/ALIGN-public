@@ -10,21 +10,28 @@ logger = logging.getLogger(__name__)
 
 class CapGenerator(DefaultCanvas):
     """
-    SKY130 MIMCAP generator for ALIGN.
+    SKY130 MIMCAP generator for ALIGN (revised).
 
-    Key fixes vs your original cap.py:
-      1) CapMIMContact is instantiated as a Via (connectivity object), NOT a Region (just geometry).
-      2) The CapMIMContact via is dropped exactly at the intersection of:
-            - CapMIMLayer MINUS plate (track 0)
-            - M5 MINUS strap (track 0)
-         so LVS/graph connectivity sees a real connection.
-      3) Backward-compatible with PDKs that only provide 'Enclosure' (no Venc* fields).
+    What this revision changes (to fix your OPENs):
+      1) Removes the large M4 "pin-purpose" shapes created by netType='pin' on M4.
+         Those pin-purpose shapes are what show up as the isolated M4 islands in your .errors.
+         (They are on a different GDS datatype than router-drawn M4, so they don't connect.)
+      2) Keeps real conductive geometry on M4/M5 + vias so the capacitor terminals are routable.
+      3) Uses a REAL via generator for CapMIMContact (not a Region), but also keeps a safe fallback
+         if your PDK doesn't fully support CapMIMContact as a via.
+      4) Fixes M4 direction usage to match SKY130 abstraction (M4 is horizontal in layers.json).
+
+    Notes:
+      - This cell is meant to be used as an INTERNAL primitive. For internal primitives, you do NOT
+        need large pin-datatype shapes; the router connects to the conductive geometry.
+      - If you truly need explicit "pin" markers for export, add *small* pins on the SAME datatype
+        as Draw (done via normal wires), or edit layers.json to merge pin/draw datatype.
     """
 
     def __init__(self, pdk):
         super().__init__(pdk)
 
-        # CapMIMLayer wire generator (used for MINUS plate)
+        # --- Cap bottom plate on CapMIMLayer (kept as in your original) ---
         self.m3n = self.addGen(
             Wire(
                 "m3n",
@@ -42,10 +49,10 @@ class CapGenerator(DefaultCanvas):
             )
         )
 
-        # M5 strap that we use to bring out one plate
+        # --- M5 strap used as one terminal (kept as in your original) ---
         self.m5_offset = (
             self.pdk["CapMIMLayer"]["Enclosure"]
-            + self.pdk["CapMIMContact"].get("Enclosure", 0)
+            + self.pdk["CapMIMContact"]["Enclosure"]
             + self.pdk["CapMIMContact"]["WidthX"] // 2
         )
 
@@ -61,38 +68,19 @@ class CapGenerator(DefaultCanvas):
                 ),
                 spg=EnclosureGrid(
                     pitch=self.pdk["M4"]["Pitch"] // 2,
-                    stoppoint=self.pdk["CapMIMContact"].get("Enclosure", 0),
+                    stoppoint=self.pdk["CapMIMContact"]["Enclosure"],
                     offset=0,
                     check=False,
                 ),
             )
         )
 
-        # Boundary marker (unchanged)
+        # Boundary marker (same as your file)
         self.Cboundary = self.addGen(
             Region("Cboundary", "Cboundary", h_grid=self.m2.clg, v_grid=self.m1.clg)
         )
 
-        # ---- FIX: CapMIMContact must be a VIA (connectivity), not a Region ----
-        cmc = self.pdk["CapMIMContact"]
-        # Prefer explicit via enclosures if your layers.json provides them; fall back to 'Enclosure'
-        h_ext = cmc.get("VencA_L", cmc.get("Enclosure", 0))
-        v_ext = cmc.get("VencA_H", cmc.get("Enclosure", 0))
-
-        self.mimc = self.addGen(
-            Via(
-                "mimc",
-                "CapMIMContact",
-                h_clg=self.m3n.clg,   # CapMIMLayer grid
-                v_clg=self.m5n.clg,   # M5 grid
-                WidthX=cmc["WidthX"],
-                WidthY=cmc["WidthY"],
-                h_ext=h_ext,
-                v_ext=v_ext,
-            )
-        )
-
-        # Existing via between M4 and M5 (unchanged)
+        # --- Via between M4 and M5 (same as your file) ---
         self.v4_x = self.addGen(
             Via(
                 "v4_x",
@@ -106,6 +94,34 @@ class CapGenerator(DefaultCanvas):
             )
         )
 
+        # --- CapMIMContact: TRY to model as a via (preferred) ---
+        # If your layers.json defines Stack for CapMIMContact, this becomes a true connectivity element.
+        cmc = self.pdk["CapMIMContact"]
+        h_ext = cmc.get("VencA_L", cmc.get("Enclosure", 0))
+        v_ext = cmc.get("VencA_H", cmc.get("Enclosure", 0))
+
+        try:
+            self.mimc = self.addGen(
+                Via(
+                    "mimc",
+                    "CapMIMContact",
+                    h_clg=self.m3n.clg,     # CapMIMLayer grid
+                    v_clg=self.m5n.clg,     # M5 grid
+                    WidthX=cmc["WidthX"],
+                    WidthY=cmc["WidthY"],
+                    h_ext=h_ext,
+                    v_ext=v_ext,
+                )
+            )
+            self._use_mimc_via = True
+        except Exception as e:
+            # Fallback to your original "draw-only" region (won't help connectivity),
+            # but keeps GDS generation from crashing in older installs.
+            logger.warning(f"CapMIMContact Via unavailable, falling back to Region: {e}")
+            clg_mim = UncoloredCenterLineGrid(pitch=2, width=2)
+            self.CapMIMC = self.addGen(Region("CapMIMC", "CapMIMContact", h_grid=clg_mim, v_grid=clg_mim))
+            self._use_mimc_via = False
+
     def addCap(self, length, width):
         x_length = int(length)
         y_length = int(width)
@@ -114,19 +130,21 @@ class CapGenerator(DefaultCanvas):
         m2_p = self.pdk["M2"]["Pitch"]
 
         m4n_xwidth = x_length + 2 * self.pdk["CapMIMLayer"]["Enclosure"]
-        m4n_ywidth = y_length + 2 * self.pdk["CapMIMLayer"]["Enclosure"]
+        _m4n_ywidth = y_length + 2 * self.pdk["CapMIMLayer"]["Enclosure"]
 
-        # NOTE: keeping your original plate construction logic intact
-        # (the main functional fix here is the CapMIMContact connectivity via).
+        # IMPORTANT FIX: M4 is horizontal in SKY130 routing abstraction.
+        # Use 'h' here (not 'v').
         m4n = Wire(
             "m4n",
             "M4",
-            "v",
+            "h",
             clg=UncoloredCenterLineGrid(
-                pitch=2 * m4n_xwidth, width=m4n_xwidth, offset=m4n_xwidth // 2
+                pitch=2 * self.pdk["M4"]["Pitch"],     # use M4 pitch for M4 tracks
+                width=m4n_xwidth,                      # wide bar = plate
+                offset=m4n_xwidth // 2,
             ),
             spg=EnclosureGrid(
-                pitch=y_length,
+                pitch=self.pdk["M3"]["Pitch"],
                 stoppoint=self.pdk["CapMIMLayer"]["Enclosure"],
                 check=False,
             ),
@@ -135,16 +153,16 @@ class CapGenerator(DefaultCanvas):
         m4n_plate = Wire(
             "m4n_plate",
             "M4",
-            "v",
+            "h",
             clg=UncoloredCenterLineGrid(
-                pitch=m4n_xwidth - self.pdk["Cap"]["m4Width"] // 2,
+                pitch=self.pdk["M4"]["Pitch"],
                 width=self.pdk["Cap"]["m4Width"],
                 offset=0,
             ),
             spg=EnclosureGrid(
                 pitch=self.pdk["M4"]["Pitch"],
                 stoppoint=0,
-                offset=-self.pdk["M4"]["Width"] // 4,
+                offset=0,
                 check=False,
             ),
         )
@@ -174,25 +192,44 @@ class CapGenerator(DefaultCanvas):
 
         logger.debug(f"Number of wires {x_number} {y_number}")
 
-        # Plates / straps
+        # --- Draw the capacitor geometry ---
+        # M4 plate for MINUS (wide bar)
         self.addWire(m4n, "MINUS", 0, (0, -1), (1, 1))
-        self.addWire(m4n_plate, "PLUS", 1, (y_number_m4 - 1 - 1, -1), (y_number_m4, 1))
+
+        # Narrow M4 bar for PLUS (acts like the other plate connection)
+        self.addWire(m4n_plate, "PLUS", 1, (y_number_m4 - 2, -1), (y_number_m4, 1))
+
+        # Bottom plate (CapMIMLayer)
         self.addWire(mimcap, "MINUS", 0, (0, -1), (1, 1))
 
         # M5 strap for MINUS
         self.addWire(self.m5n, "MINUS", 0, (-3, 1), (1, 1))
 
-        # Connect M4 ↔ M5 (your existing)
+        # Connect MINUS M4 ↔ M5 (V4)
         self.addVia(self.v4_x, "MINUS", 0, -1)
 
-        # ---- FIX: Connect CapMIMLayer ↔ M5 using a real VIA, aligned to tracks ----
-        # Track 0 on CapMIMLayer (MINUS plate) and track 0 on M5 (MINUS strap).
-        self.addVia(self.mimc, "MINUS", 0, 0)
+        # Connect CapMIMLayer ↔ M5 (CapMIMContact), if available as a Via
+        if self._use_mimc_via:
+            # drop it at track intersection (0,0) between CapMIMLayer and M5
+            self.addVia(self.mimc, "MINUS", 0, 0)
+        else:
+            # fallback: keep your original drawn contact region (geometry only)
+            gridx0 = (self.m5_offset - self.pdk["CapMIMContact"]["WidthX"] // 2) // 2
+            gridx1 = gridx0 + self.pdk["CapMIMContact"]["WidthX"] // 2
+            self.addRegion(self.CapMIMC, None, gridx0, 150, gridx1, 250)
 
-        # Pins on M4 (unchanged)
-        gridx2 = math.floor(m4n_xwidth / self.pdk["M3"]["Pitch"])
-        self.addWire(self.m4, "PLUS", y_number_m4, (-1, -1), (gridx2, 1), netType="pin")
-        self.addWire(self.m4, "MINUS", -1, (-1, -1), (gridx2, 1), netType="pin")
+        # ------------------------------------------------------------
+        # CRITICAL FIX FOR YOUR OPENs:
+        #
+        # REMOVE these two lines from your original code:
+        #   self.addWire(self.m4, 'PLUS',  ..., netType='pin')
+        #   self.addWire(self.m4, 'MINUS', ..., netType='pin')
+        #
+        # Those large M4 "pin datatype" rectangles become isolated islands
+        # (exactly the M4 rectangles shown in your .errors).
+        #
+        # The router will still connect to the conductive M4/M5 geometry above.
+        # ------------------------------------------------------------
 
         # Boundary (unchanged)
         self.addRegion(self.boundary, "Boundary", -2, -6, x_number + 1, y_number + 3)
