@@ -346,6 +346,15 @@
 },
 
 {
+"Layer": "CapMIMContact",
+"GdsLayerNo": 97,
+"GdsDatatype": {"Draw":44},
+"WidthX": 200,
+"WidthY": 200,
+"Enclosure": 200
+},
+
+{
 "Layer": "Bbox",
 "GdsLayerNo": 100,
 "GdsDatatype": {"Draw":5}
