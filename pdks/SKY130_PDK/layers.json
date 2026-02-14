@@ -341,27 +341,17 @@
 {
 "Layer": "CapMIMLayer",
 "GdsLayerNo": 89,
-"GdsDatatype": { "Draw": 44 },
-"Direction": "V",
-"Pitch": 430,
-"Width": 280,
+"GdsDatatype": {"Draw":44},
 "Enclosure": 150
 },
 
 {
 "Layer": "CapMIMContact",
 "GdsLayerNo": 70,
-"GdsDatatype": { "Draw": 44 },
-"Stack": ["CapMIMLayer", "M5"],
-"SpaceX": 200,
-"SpaceY": 200,
+"GdsDatatype": {"Draw":44},
 "WidthX": 200,
 "WidthY": 200,
-"VencA_L": 200,
-"VencA_H": 200,
-"VencP_L": 200,
-"VencP_H": 200,
-"R": { "L_3Sigma": 15, "Mean": 18, "U_3Sigma": 21 }
+"Enclosure": 200
 },
 
 {
